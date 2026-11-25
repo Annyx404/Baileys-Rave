@@ -51,12 +51,14 @@ Propriedades úteis: `rave.token`, `rave.JWT`, `rave.account`, `rave.proxy` (set
 Retornado por `rave.mesh.join(meshId)`. Cuida sozinho do `fullyJoined` e do heartbeat.
 
 - `sendChat({ text, lang?, replyTo?, mentions?, media?, id? })` — envia e retorna o id da mensagem
-- `sendChatAndWait(options, timeoutMs?)` — envia e espera a confirmação do servidor
+- `sendChatAndWait(options, timeoutMs?)` — envia e espera a sala devolver a mensagem (o chat do Rave é `notification`, então não existe resposta do servidor: a confirmação é o próprio eco)
+- `waitForEcho(messageId, texto?, timeoutMs?)` — espera o eco de uma mensagem já enviada
 - `sendReaction(messageId, emoji)` — reage a uma mensagem
-- `send(payload)` — envia um payload cru pelo WebSocket
+- `sendTyping(isTyping)` — avisa que está digitando
+- `send(payload)` / `notify(method, data?)` / `request(method, data?, timeoutMs?)` — payloads crus pelo WebSocket
 - `onopen / onclose / onerror / onmessage` — callbacks da conexão
 - `leave()` / `terminate()` — sai da sala
-- `isOpen`, `videoInstanceId`, `meshState` — estado atual
+- `isOpen`, `peerId`, `videoInstanceId`, `meshState` — estado atual
 
 Os tipos de cada método e resposta estão exportados em `src/` (via `zod`), então o autocomplete do TypeScript cobre o resto da API.
 

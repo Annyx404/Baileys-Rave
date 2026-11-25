@@ -2,7 +2,7 @@ import { Agent } from 'undici';
 
 import { APIErrorData } from './schemas/error';
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.3.2';
 
 export const SYMBOLS = '0123456789abcdef';
 export const API_URL = 'https://api1.a-l-p-a.com';
