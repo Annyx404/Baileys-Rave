@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 
 import { HASH_SECRET, SYMBOLS, UUID_PATTERN } from '../constants';
 
@@ -25,3 +25,9 @@ export const generateSSAID = () =>
     { length: 16 },
     () => SYMBOLS[Math.floor(Math.random() * 16)],
   ).join('');
+
+export const ssaidFromDeviceId = (deviceId: string) =>
+  createHash('sha256').update(String(deviceId)).digest('hex').slice(0, 16);
+
+export const contentHashOf = (data: Buffer) =>
+  createHash('sha256').update(data).digest('hex');

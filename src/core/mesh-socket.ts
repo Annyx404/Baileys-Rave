@@ -58,9 +58,12 @@ export class MeshSocket {
     this.__url = `wss://${this.__config.server}/?roomId=${this.__config.meshId}&peerId=${this.__peerId}`;
     this.__websocket = new WebSocket(this.__url, 'protoo', {
       rejectUnauthorized: false,
+      perMessageDeflate: false,
       headers: {
         authorization: `Bearer ${this.__config.credentials.token}`,
         'API-Version': '4',
+        'User-Agent': 'okhttp/5.1.0',
+        'Accept-Encoding': 'gzip',
       },
       agent: this.__config.proxy
         ? new SocksProxyAgent(this.__config.proxy)
