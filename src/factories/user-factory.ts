@@ -1,7 +1,8 @@
 import { any } from 'zod';
 
 import { HttpWorkflow } from '../core/httpworkflow';
-import { EditProfileBuilder, Sites, User } from '../schemas';
+import { EditProfileBuilder, RaveConfig, Sites, User } from '../schemas';
+import { contentHashOf } from '../utils/cryptography';
 import {
   EditProfileResponse,
   EditProfileSchema,
@@ -26,11 +27,21 @@ export interface ProfileChanges {
   metadata?: { position: number; privacy: string };
 }
 
+export interface GalleryItem {
+  id: string;
+  aspectRatio?: string;
+  images?: Record<string, string>;
+  mediaClass?: string;
+  metadata?: { position?: number; privacy?: string };
+}
+
 export class UserFactory {
   private readonly __http: HttpWorkflow;
+  private readonly __config: RaveConfig;
 
-  constructor(http: HttpWorkflow) {
+  constructor(http: HttpWorkflow, config: RaveConfig = {}) {
     this.__http = http;
+    this.__config = config;
   }
 
   private __friendshipRequests = async (
@@ -161,11 +172,32 @@ export class UserFactory {
     );
   };
 
-  public getAvatarUpload = async (): Promise<GetAvatarUploadResponse> => {
+  public getMany = async (
+    userIds: number | number[],
+    includeOnline = true,
+  ): Promise<User[]> => {
+    const ids = (Array.isArray(userIds) ? userIds : [userIds]).map(Number);
+    const resp = await this.__http.sendPost<{ data?: User[] }>(
+      {
+        path: '/users/list',
+        body: JSON.stringify({
+          deviceId: this.__config?.credentials?.deviceId,
+          ids,
+          includeOnline,
+        }),
+      },
+      any(),
+    );
+    return resp?.data ?? [];
+  };
+
+  public getAvatarUpload = async (
+    mime = 'image/jpeg',
+  ): Promise<GetAvatarUploadResponse> => {
     return await this.__http.sendPost<GetAvatarUploadResponse>(
       {
         path: '/users/self/avatar/upload',
-        body: JSON.stringify({ mime: 'image/jpeg' }),
+        body: JSON.stringify({ mime }),
       },
       GetAvatarUploadSchema,
     );
@@ -174,6 +206,7 @@ export class UserFactory {
   public uploadOnUrl = async (
     uploadUrl: string,
     image: Buffer,
+    mime = 'image/jpeg',
   ): Promise<any> => {
     return await this.__http.sendRaw(
       {
@@ -181,16 +214,79 @@ export class UserFactory {
         method: 'PUT',
         body: image,
         headers: {
-          'Content-Type': 'image/jpeg',
+          'Content-Type': mime,
         },
       },
       any(),
     );
   };
 
-  public uploadAvatar = async (image: Buffer): Promise<string> => {
-    const { data } = await this.getAvatarUpload();
-    await this.uploadOnUrl(data.uploadUrl, image);
+  public uploadAvatar = async (
+    image: Buffer,
+    mime = 'image/jpeg',
+  ): Promise<string> => {
+    const { data } = await this.getAvatarUpload(mime);
+    await this.uploadOnUrl(data.uploadUrl, image, mime);
     return data.uploadUrl;
+  };
+
+  public setAvatar = async (
+    image: Buffer,
+    mime = 'image/jpeg',
+    aspectRatio = '1.00',
+    contentHash?: string,
+  ): Promise<EditProfileResponse> => {
+    const displayAvatar = await this.uploadAvatar(image, mime);
+
+    return await this.__http.sendPut<EditProfileResponse>(
+      {
+        path: '/users/self',
+        body: JSON.stringify({
+          aspectRatio,
+          contentHash: contentHash ?? contentHashOf(image),
+          displayAvatar,
+        }),
+      },
+      EditProfileSchema,
+    );
+  };
+
+  public getGallery = async (userId: number): Promise<GalleryItem[]> => {
+    const resp = await this.__http.sendGet<any>(
+      { path: `/profiles/${userId}?exclude=false&clientVersion=1` },
+      any(),
+    );
+    const gallery = resp?.data?.gallery ?? resp?.data?.profile?.gallery;
+    return Array.isArray(gallery) ? gallery : [];
+  };
+
+  public addGalleryItem = async (
+    image: Buffer,
+    mime = 'image/jpeg',
+    aspectRatio = '1.00',
+    contentHash?: string,
+  ): Promise<GalleryItem | null> => {
+    const galleryItem = await this.uploadAvatar(image, mime);
+
+    const resp = await this.__http.sendPut<{ data?: GalleryItem }>(
+      {
+        path: '/profiles/gallery',
+        body: JSON.stringify({
+          aspectRatio,
+          contentHash: contentHash ?? contentHashOf(image),
+          galleryItem,
+        }),
+      },
+      any(),
+    );
+    return resp?.data ?? null;
+  };
+
+  public deleteGalleryItem = async (itemId: string): Promise<boolean> => {
+    const resp = await this.__http.sendDelete<{ success?: boolean }>(
+      { path: `/profiles/gallery/${itemId}` },
+      any(),
+    );
+    return resp?.success !== false;
   };
 }

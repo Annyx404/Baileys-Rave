@@ -23,6 +23,7 @@ import { APIException } from '../utils/exceptions';
 export class HttpWorkflow {
   private __headers: HeadersType = { ...API_HEADERS };
   private __weMeshHeaders: HeadersType = { ...API_HEADERS };
+  private __ssaid: string = generateSSAID();
 
   private __currentProxy?: string;
   private __currentDispatcher?: ProxyAgent;
@@ -53,6 +54,14 @@ export class HttpWorkflow {
     this.__weMeshHeaders.Authorization = `Bearer ${token}`;
   }
 
+  get ssaid(): string {
+    return this.__ssaid;
+  }
+
+  set ssaid(ssaid: string) {
+    if (ssaid) this.__ssaid = ssaid;
+  }
+
   set popHeaders(key: string) {
     delete this.__headers[key];
   }
@@ -67,7 +76,7 @@ export class HttpWorkflow {
     return {
       ...(headers || this.__headers),
       'request-ts': timestamp,
-      ssaid: generateSSAID(),
+      ssaid: this.__ssaid,
       Host: host || this.__headers.Host,
       'request-hash': generateHash(
         this.token,
