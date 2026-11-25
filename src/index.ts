@@ -2,7 +2,7 @@ export { Rave } from './core/rave';
 export { generateToken } from './utils/cryptography';
 export { APIException } from './utils/exceptions';
 export * as schemas from './schemas/index';
-export type { ChatOptions, SocketResponse } from './core/mesh-socket';
+export type { ChatOptions, ChatResult, SocketResponse } from './core/mesh-socket';
 export type { MediaUploadInfo, QueueItemInput } from './factories/mesh-factory';
 export type { ProfileChanges } from './factories/user-factory';
 export type {

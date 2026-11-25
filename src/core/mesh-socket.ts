@@ -2,7 +2,11 @@ import { WebSocket } from 'ws';
 import { randomUUID } from 'crypto';
 
 import { MeshSocketConfig } from '../schemas/private';
-import { SOCKET_DEAD_TIMEOUT, SOCKET_PING_DELAY } from '../constants';
+import {
+  DEFAULT_LANGUAGE,
+  SOCKET_DEAD_TIMEOUT,
+  SOCKET_PING_DELAY,
+} from '../constants';
 import { LOGGER } from '../utils/logger';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 
@@ -23,21 +27,35 @@ export interface ChatOptions {
   id?: string;
 }
 
+export interface ChatResult extends SocketResponse {
+  messageId: string;
+  echoId?: string;
+}
+
+interface EchoWaiter {
+  text: string;
+  done: (echoId: string | null) => void;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ECHO_TIMEOUT = 8000;
 
 export class MeshSocket {
   private __config: MeshSocketConfig;
   private __url: string;
+  private __peerId: string;
   private __websocket: WebSocket;
   private __heartbeat?: NodeJS.Timeout;
   private __lastActivity = Date.now();
   private __pending = new Map<number, (r: SocketResponse) => void>();
+  private __echoes = new Map<string, EchoWaiter>();
   private __meshState: Record<string, any> | undefined;
   private __videoInstanceId: string | undefined;
 
   constructor(config: MeshSocketConfig) {
     this.__config = config;
-    this.__url = `wss://${this.__config.server}/?roomId=${this.__config.meshId}&peerId=${this.__config.userId}_${this.__config.credentials.deviceId}`;
+    this.__peerId = `${this.__config.userId}_${this.__config.credentials.deviceId}`;
+    this.__url = `wss://${this.__config.server}/?roomId=${this.__config.meshId}&peerId=${this.__peerId}`;
     this.__websocket = new WebSocket(this.__url, 'protoo', {
       rejectUnauthorized: false,
       headers: {
@@ -62,6 +80,7 @@ export class MeshSocket {
 
     this.__websocket.on('message', this.__touch);
     this.__websocket.on('message', this.__onResponse);
+    this.__websocket.on('message', this.__onChatEcho);
     this.__websocket.on('message', this.__onStateMessage);
     this.__websocket.on('pong', this.__touch);
 
@@ -69,6 +88,7 @@ export class MeshSocket {
       LOGGER.info({ url: this.__url }, 'WebSocket fechado');
       this.__stopHeartbeat();
       this.__flushPending('closed');
+      this.__flushEchoes();
     });
   }
 
@@ -157,6 +177,44 @@ export class MeshSocket {
     });
   };
 
+  private __onChatEcho = (raw: unknown) => {
+    if (this.__echoes.size === 0) return;
+
+    let msg: any;
+    try {
+      msg = JSON.parse(String(raw));
+    } catch {
+      return;
+    }
+    if (!msg || msg.method !== 'chatMessage') return;
+
+    const data = msg.data;
+    if (!data || typeof data !== 'object') return;
+
+    const from = typeof data.from === 'string' ? data.from : null;
+    if (from && from !== this.__peerId) return;
+
+    const echoId = typeof data.id === 'string' ? data.id : null;
+    if (echoId) {
+      const exact = this.__echoes.get(echoId);
+      if (exact) {
+        this.__echoes.delete(echoId);
+        exact.done(echoId);
+        return;
+      }
+    }
+
+    const chat = typeof data.chat === 'string' ? data.chat : '';
+    if (!chat) return;
+
+    for (const [key, waiter] of this.__echoes) {
+      if (!waiter.text || waiter.text !== chat) continue;
+      this.__echoes.delete(key);
+      waiter.done(echoId || key);
+      return;
+    }
+  };
+
   private __findInstanceId = (node: unknown, depth = 0): string | undefined => {
     if (!node || typeof node !== 'object' || depth > 6) return undefined;
 
@@ -214,6 +272,12 @@ export class MeshSocket {
     }
   };
 
+  private __flushEchoes = () => {
+    const waiting = Array.from(this.__echoes.values());
+    this.__echoes.clear();
+    for (const waiter of waiting) waiter.done(null);
+  };
+
   private __newId = (): number => {
     let id: number;
     do {
@@ -259,6 +323,9 @@ export class MeshSocket {
     }
   };
 
+  public notify = (method: string, data: object = {}): boolean =>
+    this.send({ data, method, notification: true });
+
   public request = (
     method: string,
     data: object = {},
@@ -268,7 +335,7 @@ export class MeshSocket {
 
   private __chatData = (options: ChatOptions) => {
     const text = options.text ?? '';
-    const lang = options.lang ?? 'en';
+    const lang = options.lang ?? DEFAULT_LANGUAGE;
     const messageId = options.id ?? randomUUID();
 
     const data: Record<string, unknown> = {
@@ -276,17 +343,17 @@ export class MeshSocket {
       detected_lang: lang,
       id: messageId,
       translations: { [lang]: text },
-      reply: options.replyTo ?? null,
-      emoji: null,
-      reaction: null,
-      media: (options.media ?? []).map((m, index) => ({
-        index,
-        mime: m.mime,
-        url: m.url,
-        isExplicit: !!m.isExplicit,
-      })),
-      links: [],
     };
+
+    if (options.replyTo) data.reply = options.replyTo;
+
+    const media = (options.media ?? []).map((m, index) => ({
+      index,
+      mime: m.mime,
+      url: m.url,
+      isExplicit: !!m.isExplicit,
+    }));
+    if (media.length > 0) data.media = media;
 
     const mentions = (options.mentions ?? [])
       .filter((m) => m && m.id != null && m.handle)
@@ -296,13 +363,32 @@ export class MeshSocket {
     return { messageId, data };
   };
 
+  public waitForEcho = (
+    messageId: string,
+    text = '',
+    timeoutMs = ECHO_TIMEOUT,
+  ): Promise<string | null> =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.__echoes.delete(messageId);
+        resolve(null);
+      }, timeoutMs);
+      timer.unref?.();
+
+      this.__echoes.set(messageId, {
+        text,
+        done: (echoId) => {
+          clearTimeout(timer);
+          resolve(echoId);
+        },
+      });
+    });
+
   public sendChat = (options: ChatOptions): string | null => {
     const { messageId, data } = this.__chatData(options);
     const ok = this.send({
       data,
-      id: this.__newId(),
       method: 'chatMessage',
-      request: true,
       notification: true,
     });
     return ok ? messageId : null;
@@ -310,17 +396,34 @@ export class MeshSocket {
 
   public sendChatAndWait = async (
     options: ChatOptions,
-    timeoutMs = 10000,
-  ): Promise<SocketResponse & { messageId: string }> => {
+    timeoutMs = ECHO_TIMEOUT,
+  ): Promise<ChatResult> => {
     const { messageId, data } = this.__chatData(options);
-    const r = await this.__requestRaw(
-      { data, method: 'chatMessage', request: true, notification: true },
+    const espera = this.waitForEcho(
+      messageId,
+      String(options.text ?? ''),
       timeoutMs,
     );
-    return { ...r, messageId };
+
+    if (!this.send({ data, method: 'chatMessage', notification: true })) {
+      return { ok: false, errorCode: 'send_failed', messageId };
+    }
+
+    const echoId = await espera;
+    if (!echoId) {
+      return {
+        ok: false,
+        timedOut: true,
+        errorCode: 'no_echo',
+        errorReason: 'a sala não devolveu a mensagem',
+        messageId,
+      };
+    }
+
+    return { ok: true, messageId, echoId };
   };
 
-  public sendReaction = (messageId: string, emoji: string): string | null => {
+  public sendReaction = (messageId: string, emoji: string | null): string | null => {
     const id = randomUUID();
     const ok = this.send({
       data: {
@@ -334,16 +437,21 @@ export class MeshSocket {
         media: [],
         links: [],
       },
-      id: this.__newId(),
       method: 'chatMessage',
-      request: true,
       notification: true,
     });
     return ok ? id : null;
   };
 
+  public sendTyping = (isTyping: boolean): boolean =>
+    this.notify(isTyping ? 'typing' : 'typing_stop');
+
   get isOpen(): boolean {
     return this.__websocket.readyState === WebSocket.OPEN;
+  }
+
+  get peerId(): string {
+    return this.__peerId;
   }
 
   get lastActivityAt(): number {
@@ -374,17 +482,11 @@ export class MeshSocket {
     this.__websocket.on('message', handler);
   };
 
-  public sendMessage = (content: string): void => {
+  public sendMessage = (content: string, lang = DEFAULT_LANGUAGE): void => {
+    const { data } = this.__chatData({ text: content, lang });
     this.__send(
       JSON.stringify({
-        data: {
-          chat: content,
-          detected_lang: 'ru',
-          id: randomUUID(),
-          translations: {
-            ru: content,
-          },
-        },
+        data,
         method: 'chatMessage',
         notification: true,
       }),

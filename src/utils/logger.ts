@@ -1,20 +1,26 @@
 import pino, { Logger } from 'pino';
 import prettifier from 'pino-pretty';
 
-export let LOGGER: Logger;
-
-const initLogger = (enableLogging: boolean): Logger => {
-  if (LOGGER) return LOGGER;
-
-  return (LOGGER = pino(
+const build = (enabled: boolean): Logger =>
+  pino(
     {
-      enabled: enableLogging,
+      enabled,
     },
     prettifier({
       colorize: true,
       sync: true,
     }),
-  ));
+  );
+
+export let LOGGER: Logger = build(false);
+
+let configured = false;
+
+const initLogger = (enableLogging: boolean): Logger => {
+  if (configured) return LOGGER;
+
+  configured = true;
+  return (LOGGER = build(enableLogging));
 };
 
 export default initLogger;
