@@ -56,7 +56,7 @@ export class Rave {
 
   get user() {
     if (!this.__userFactory)
-      return (this.__userFactory = new UserFactory(this.__http));
+      return (this.__userFactory = new UserFactory(this.__http, this.__config));
     return this.__userFactory;
   }
 

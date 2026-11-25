@@ -26,7 +26,7 @@ import {
   ValidateMeSchema,
   ValidateMeResponse,
 } from '../schemas/responses';
-import { generateToken } from '../utils/cryptography';
+import { generateToken, ssaidFromDeviceId } from '../utils/cryptography';
 import { APIException } from '../utils/exceptions';
 
 export class AuthFactory {
@@ -127,6 +127,7 @@ export class AuthFactory {
       deviceId,
     };
     this.__http.token = token;
+    this.__http.ssaid = ssaidFromDeviceId(deviceId);
 
     const account = await this.getAccount();
     await this.refreshJWT(deviceId);
@@ -197,6 +198,7 @@ export class AuthFactory {
       token: this.__http.token,
       deviceId,
     };
+    this.__http.ssaid = ssaidFromDeviceId(deviceId);
 
     return await this.__http.sendPost(
       {
