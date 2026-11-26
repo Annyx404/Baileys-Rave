@@ -191,6 +191,85 @@ export class UserFactory {
     return resp?.data ?? [];
   };
 
+  public getFriendRequests = async (): Promise<any[]> => {
+    const resp = await this.__http.sendGet<{ data?: any[] }>(
+      { path: '/friendships/requests?state=pendingactionable' },
+      any(),
+    );
+    return Array.isArray(resp?.data) ? resp.data : [];
+  };
+
+  private __perfilCompleto = async (userId: number): Promise<any> => {
+    const resp = await this.__http.sendGet<any>(
+      { path: `/profiles/${userId}?exclude=false&clientVersion=1` },
+      any(),
+    );
+    return resp?.data ?? {};
+  };
+
+  public setBio = async (userId: number, bio: string): Promise<unknown> => {
+    const atual = await this.__perfilCompleto(userId);
+    const metadata = atual?.bio?.metadata ?? { position: 1, privacy: 'public' };
+
+    return await this.__http.sendPut<unknown>(
+      {
+        path: '/profiles',
+        body: JSON.stringify({
+          bio: { bio, metadata },
+          exclude: false,
+          clientVersion: 1,
+        }),
+      },
+      any(),
+    );
+  };
+
+  public setDisplayName = async (
+    userId: number,
+    displayName: string,
+  ): Promise<EditProfileResponse> => {
+    const resp = await this.__http.sendPut<EditProfileResponse>(
+      {
+        path: '/users/self',
+        body: JSON.stringify({ displayName }),
+      },
+      EditProfileSchema,
+    );
+    try {
+      await this.updateProfile(userId, { name: displayName });
+    } catch {}
+    return resp;
+  };
+
+  public setOnlineVisible = async (
+    userId: number,
+    visible: boolean,
+  ): Promise<unknown> => {
+    const atual = await this.__perfilCompleto(userId);
+    const statistics = atual?.statistics;
+    if (!statistics || typeof statistics !== 'object') {
+      throw new Error('O perfil não trouxe as estatísticas');
+    }
+
+    return await this.__http.sendPut<unknown>(
+      {
+        path: '/profiles',
+        body: JSON.stringify({
+          statistics: {
+            ...statistics,
+            isOnline: {
+              ...(statistics.isOnline ?? { value: true }),
+              privacy: visible ? 'public' : 'private',
+            },
+          },
+          exclude: false,
+          clientVersion: 1,
+        }),
+      },
+      any(),
+    );
+  };
+
   public getAvatarUpload = async (
     mime = 'image/jpeg',
   ): Promise<GetAvatarUploadResponse> => {
