@@ -3,7 +3,12 @@ export { generateToken } from './utils/cryptography';
 export { APIException } from './utils/exceptions';
 export * as schemas from './schemas/index';
 export type { ChatOptions, ChatResult, SocketResponse } from './core/mesh-socket';
-export type { MediaUploadInfo, QueueItemInput } from './factories/mesh-factory';
+export type {
+  MediaUploadInfo,
+  MeshPrivacy,
+  MeshSettings,
+  QueueItemInput,
+} from './factories/mesh-factory';
 export type { GalleryItem, ProfileChanges } from './factories/user-factory';
 export type {
   YoutubeVideoInput,
