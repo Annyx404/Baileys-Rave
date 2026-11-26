@@ -53,7 +53,7 @@ Retornado por `rave.mesh.join(meshId)`. Cuida sozinho do `fullyJoined` e do hear
 - `sendChat({ text, lang?, replyTo?, mentions?, media?, id? })` — envia e retorna o id da mensagem
 - `sendChatAndWait(options, timeoutMs?)` — envia e espera a sala devolver a mensagem (o chat do Rave é `notification`, então não existe resposta do servidor: a confirmação é o próprio eco)
 - `waitForEcho(messageId, texto?, timeoutMs?)` — espera o eco de uma mensagem já enviada
-- `sendReaction(messageId, emoji)` — reage a uma mensagem
+- `sendReaction(messageId, emoji)` / `removeReaction(messageId, emoji)` — reage ou tira a reação (o app tira mandando a mesma reação com `clear: true`)
 - `sendTyping(isTyping)` — avisa que está digitando
 - `send(payload)` / `notify(method, data?)` / `request(method, data?, timeoutMs?)` — payloads crus pelo WebSocket
 - `onopen / onclose / onerror / onmessage` — callbacks da conexão

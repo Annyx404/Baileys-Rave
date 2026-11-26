@@ -426,24 +426,34 @@ export class MeshSocket {
     return { ok: true, messageId, echoId };
   };
 
+  private __reactionData = (
+    messageId: string,
+    emoji: string | null,
+    clear: true | null,
+  ) => ({
+    chat: '',
+    clear,
+    detected_lang: null,
+    emoji,
+    id: randomUUID(),
+    links: [],
+    media: [],
+    reaction: messageId,
+    reply: null,
+    translations: null,
+    user_metas: null,
+  });
+
   public sendReaction = (messageId: string, emoji: string | null): string | null => {
-    const id = randomUUID();
-    const ok = this.send({
-      data: {
-        chat: '',
-        detected_lang: null,
-        id,
-        translations: null,
-        reply: null,
-        emoji,
-        reaction: messageId,
-        media: [],
-        links: [],
-      },
-      method: 'chatMessage',
-      notification: true,
-    });
-    return ok ? id : null;
+    const data = this.__reactionData(messageId, emoji, null);
+    const ok = this.send({ data, method: 'chatMessage', notification: true });
+    return ok ? data.id : null;
+  };
+
+  public removeReaction = (messageId: string, emoji: string): string | null => {
+    const data = this.__reactionData(messageId, emoji, true);
+    const ok = this.send({ data, method: 'chatMessage', notification: true });
+    return ok ? data.id : null;
   };
 
   public sendTyping = (isTyping: boolean): boolean =>
