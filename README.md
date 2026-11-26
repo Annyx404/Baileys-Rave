@@ -38,7 +38,7 @@ Tudo parte da classe `Rave`, dividida em factories:
 | Acesso | Para quê |
 |--------|----------|
 | `rave.auth` | Login (magic link / mojo), JWT, conta |
-| `rave.mesh` | Salas: entrar, listar, kick, mute, coroa, estado do player, votar, curtir/pular, upload de mídia |
+| `rave.mesh` | Salas: entrar, listar, kick, mute, coroa, privacidade (privada, amigos, pública), estado do player, votar, curtir/pular, upload de mídia |
 | `rave.user` | Perfis (um ou em lote), amizades, editar perfil, avatar e galeria |
 | `rave.thread` | DMs: listar, criar, enviar mensagem |
 | `rave.video` | Buscar/registrar vídeos do YouTube e Disney+ |

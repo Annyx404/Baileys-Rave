@@ -29,6 +29,19 @@ export interface MediaUploadInfo {
   fileName: string;
 }
 
+export type MeshPrivacy = 'private' | 'friends' | 'public';
+
+export interface MeshSettings {
+  isFriend: boolean;
+  isLocal: boolean;
+  isPublic: boolean;
+  lat: number;
+  lng: number;
+  playMode: string;
+  radius: number;
+  voipMode: string;
+}
+
 export interface QueueItemInput {
   title: string;
   thumbnail: string;
@@ -133,6 +146,41 @@ export class MeshFactory {
     );
     return !!resp?.success;
   };
+
+  public updateSettings = async (
+    meshId: string,
+    changes: Partial<MeshSettings> = {},
+  ): Promise<GetMeshResponse> => {
+    const atual: any = (await this.get(meshId))?.data ?? {};
+
+    const settings: MeshSettings = {
+      isFriend: changes.isFriend ?? !!atual.isFriend,
+      isLocal: changes.isLocal ?? !!atual.isLocal,
+      isPublic: changes.isPublic ?? !!atual.isPublic,
+      lat: changes.lat ?? 0,
+      lng: changes.lng ?? 0,
+      playMode: changes.playMode ?? atual.playMode ?? 'VOTE',
+      radius: changes.radius ?? 0,
+      voipMode: changes.voipMode ?? atual.voipMode ?? 'ALL',
+    };
+
+    return await this.__http.sendPut<GetMeshResponse>(
+      {
+        path: `/meshes/${meshId}`,
+        body: JSON.stringify(settings),
+      },
+      GetMeshSchema,
+    );
+  };
+
+  public setPrivacy = async (
+    meshId: string,
+    privacy: MeshPrivacy,
+  ): Promise<GetMeshResponse> =>
+    this.updateSettings(meshId, {
+      isPublic: privacy === 'public',
+      isFriend: privacy === 'friends',
+    });
 
   public mute = async (
     meshId: string,
